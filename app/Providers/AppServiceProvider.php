@@ -13,7 +13,8 @@ class AppServiceProvider extends ServiceProvider
      */
     public function register()
     {
-        //
+        // bind import service interface to import service
+        $this->app->bind('App\Services\Import\Contracts\ImportServiceInterface', 'App\Services\Import\ImportService');
     }
 
     /**
