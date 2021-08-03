@@ -2,14 +2,21 @@
 return [
     /*
     |--------------------------------------------------------------------------
-    | Read Position Tracker
+    | Read Position Trackers
     |--------------------------------------------------------------------------
     |
-    | Path to file to be used for tracking upload, 
-    |relative to project root
+    | Path to files to be used for tracking upload, 
+    | relative to project root, in case of interuptions
+    | 
+    | Note:
+    | =====
+    | We could have used a single file, serializing and array/object 
+    | of both trackers and unserializing when needed, however, this
+    | would be a quicker
     |
     */
-    'tracker' => base_path().'/resources/challenge/tracker.txt',
+    'position_tracker' => base_path().'/resources/challenge/position_tracker.txt',
+    'buffer_tracker' => base_path().'/resources/challenge/buffer_tracker.txt',
 
     /*
     |--------------------------------------------------------------------------
@@ -20,7 +27,7 @@ return [
     | Path is relative to project root directory
     |
     */
-    'testImportFilePath' => '/challenge/test.json',
+    'testImportFilePath' => '/resources/challenge/test.json',
 
     /*
     |--------------------------------------------------------------------------
@@ -37,15 +44,15 @@ return [
     | Class Maps
     |--------------------------------------------------------------------------
     |
-    | This is the array of Classes that maps to file readers.
-    | more readers can be added here, however ensure the reader class
-    | implements \App\Services\Import\Contracts\FileReaderInterface
+    | This is the array of Classes that maps to file parsers.
+    | more parsers can be added here, however ensure the parser class
+    | implements \App\Services\Import\Contracts\FileParserInterface
     |
     */
     'map' => [
-        'csv' => \App\Services\Import\FileReaders\Csv::class,
-        'xml' => \App\Services\Import\FileReaders\Xml::class,
-        'json' => \App\Services\Import\FileReaders\Json::class,
+        'csv' => \App\Services\Import\FileParsers\Csv::class,
+        'xml' => \App\Services\Import\FileParsers\Xml::class,
+        'json' => \App\Services\Import\FileParsers\Json::class,
         // ...
     ],
 ];

@@ -2,6 +2,8 @@
 
 namespace App\Services\Import\Contracts;
 
+use App\Services\Import\Contracts\FileParserInterface;
+
 interface ImportServiceInterface
 {
     /**
@@ -21,29 +23,56 @@ interface ImportServiceInterface
     public function resolvePath(string $filePath = null): string;
 
     /**
-     * determine which file reader to use based off file extension
-     */
-    public function setFileReader(string $extention): self;
-
-    /**
-     * Get the file reader instance been used for file import
-     */
-    public function getFileReader();
-
-    /**
-     * apply age constraints to filter data
+     * determine which file parser to use based off file extension
      * 
-     * @param array $record
+     * @param string $extension
+     * @return self
+     */
+    public function setFileParser(string $extention): self;
+
+    /**
+     * Get the file parser instance been used for file import
+     * 
+     * @return FileParserInterface
+     */
+    public function getFileParser(): FileParserInterface;
+
+    /**
+     * checks if we had already started reading file before
+     * and resume from the line we stopped
+     * 
+     * @return self
+     */
+    public function openFile(string $filePath): self;
+
+    /**
+     * breaks file in chunks using generators
+     * to ensure memory efficiency
+     * 
+     * @param int chunkSize
+     * @return \Generator
+     */
+    public function lazyLoad(int $chunkSize): \Generator;
+    
+    /**
+     * save current read position in file 
+     * 
+     * @return self
+     */
+    public function saveReadState(): self;
+
+    /**
+     * checks if we had already started reading file before
+     * and resume from the line we stopped
+     * 
+     * @return self
+     */
+    public function resumeReadState(): self;
+
+    /**
+     * Closes file if open
+     * 
      * @return bool
      */
-    // TODO: as a suggested improvement, consider using pipelines
-    public function isRequiredAge(array $record): bool;
-
-    /**
-     * Store valid json gotten so far from chunks to db
-     * 
-     * @param array $user
-     * @return bool
-     */
-    public function save( array $user ): bool;
+    public function closeFile(): bool;
 }
