@@ -20,7 +20,7 @@ return [
     | Path is relative to project root directory
     |
     */
-    'testImportFilePath' => '/challenge/test.json',
+    'testImportFilePath' => '/resources/challenge/test.json',
 
     /*
     |--------------------------------------------------------------------------
@@ -37,15 +37,15 @@ return [
     | Class Maps
     |--------------------------------------------------------------------------
     |
-    | This is the array of Classes that maps to file readers.
-    | more readers can be added here, however ensure the reader class
-    | implements \App\Services\Import\Contracts\FileReaderInterface
+    | This is the array of Classes that maps to file parsers.
+    | more parsers can be added here, however ensure the parser class
+    | implements \App\Services\Import\Contracts\FileParserInterface
     |
     */
     'map' => [
-        'csv' => \App\Services\Import\FileReaders\Csv::class,
-        'xml' => \App\Services\Import\FileReaders\Xml::class,
-        'json' => \App\Services\Import\FileReaders\Json::class,
+        'csv' => \App\Services\Import\FileParsers\Csv::class,
+        'xml' => \App\Services\Import\FileParsers\Xml::class,
+        'json' => \App\Services\Import\FileParsers\Json::class,
         // ...
     ],
 ];
