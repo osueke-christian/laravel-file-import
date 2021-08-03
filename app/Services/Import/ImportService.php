@@ -5,8 +5,10 @@ namespace App\Services\Import;
 use DB;
 use Carbon\Carbon;
 use App\Models\User;
-use App\Services\Import\Contracts\FileReaderInterface;
+use App\Jobs\ProcessFileChunk;
+use App\Services\Import\Contracts\FileParserInterface;
 use App\Services\Import\Contracts\ImportServiceInterface;
+use App\Services\User\Contracts\UserServiceInterface;
 
 class ImportService implements ImportServiceInterface
 {
@@ -21,14 +23,14 @@ class ImportService implements ImportServiceInterface
     private $file;
 
     /**
-     * @var FileReaderInterface $fileReader
+     * @var UserServiceInterface userService
      */
-    private $fileReader;
+    private $userService;
 
     /**
-     * @var User $user
+     * @var FileParserInterface $fileParser
      */
-    private $user;
+    private $fileParser;
 
     /**
      * @var string buffer
@@ -38,13 +40,13 @@ class ImportService implements ImportServiceInterface
     /**
      * construct class dependencies
      * 
-     * @param FileReaderInterface fileReader
+     * @param FileParserInterface fileParser
      * @param User user
      */
-    public function __construct( User $user )
+    public function __construct(UserServiceInterface $userService)
     {
         $this->loadConfig();
-        $this->user = $user;
+        $this->userService = $userService;
     }
 
     /**
@@ -52,7 +54,14 @@ class ImportService implements ImportServiceInterface
      */
     public function loadConfig(): void
     {
-        $this->config = config('custom.filereader');
+        $this->config = config('custom.fileparser');
+    }
+
+    public function openFile(string $filePath): self
+    {
+        $this->file = fopen($filePath, 'r');
+
+        return $this;
     }
 
     /**
@@ -65,18 +74,38 @@ class ImportService implements ImportServiceInterface
     {
         // resolve and validate path to import file
         $filePath = $this->resolvePath($filePath);
-
-        // set file reader based off file extension type
-        $this->setFileReader( pathinfo($filePath, PATHINFO_EXTENSION) );
         
-        // read file in chunks
-        // note: lazyload uses generators for memory efficiency
-        foreach ($this->getFileReader()->lazyLoad( $filePath, $this->config['CHUNK_SIZE'] ) as $user){
-            // filter records where age is between 18 and 16 or unknown
-            if( $this->isRequiredAge($user) ){
-                // store data
-                $this->save($user);
-            }
+        $this 
+            ->setFileParser( pathinfo($filePath, PATHINFO_EXTENSION) ) // set file parser
+            ->openFile($filePath) // open file to be imported
+            ->resumeReadState(); // continue from last read position if initially read
+                    
+        // load file content in chunks and pass to job for processing
+        foreach($this->lazyLoad($this->config['CHUNK_SIZE']) as $chunk){
+            ProcessFileChunk::dispatch($chunk, $this->getFileParser(), $this->userService)
+                            ->delay( now()->addSeconds(10) );
+        };
+
+        // close file
+        $this->closeFile();
+    }
+
+    /**
+     * breaks file in chunks using generators
+     * to ensure memory efficiency
+     * 
+     * @param int chunkSize
+     * @return \Generator
+     */
+    public function lazyLoad(int $chunkSize): \Generator
+    {
+        // recursively read file in chunks till we get to end of file
+        while(!feof($this->file)){
+            // grab a chunk of data and pass for processing
+            yield fread($this->file, $chunkSize);
+
+            // keep track of read position
+            $this->saveReadState();
         }
     }
 
@@ -99,109 +128,97 @@ class ImportService implements ImportServiceInterface
     }
 
     /**
-     * determine which file reader to use based off file extension
+     * determine which file parser to use based off file extension
      */
     // TODO: use a custom exception handler
-    public function setFileReader(string $extention): self
+    public function setFileParser(string $extention): self
     {
-        // if file reader for specified extension has already been set, return
-        if($this->fileReader && $this->fileReader->getSupportedExtension() === $extention){
+        // if file parser for specified extension has already been set, return
+        if($this->fileParser && $this->fileParser->getSupportedExtension() === $extention){
             return $this;
         }
 
-        // ensure there is a reader configured for specified file extension 
+        // ensure there is a parser configured for specified file extension 
         if ( empty($this->config['map'][$extention]) ) {
-            throw new \InvalidArgumentException('File extension reader not set in config file.');
+            throw new \InvalidArgumentException('File extension parser not set in config file.');
         }
 
-        // ensure the configured file reader class is valid
+        // ensure the configured file parser class is valid
         if (! class_exists($this->config['map'][$extention])) {
-            throw new \InvalidArgumentException('File extension reader not found. Update config map.');
+            throw new \InvalidArgumentException('File extension parser not found. Update config map.');
         }
 
         // reflect on the clas and ensure it implements the required interface
         $reflect = new \ReflectionClass($this->config['map'][$extention]);
-        if (! $reflect->implementsInterface(FileReaderInterface::class)) {
-            throw new \InvalidArgumentException("File reader must be an instance of FileReaderInterface.");
+        if (! $reflect->implementsInterface(FileParserInterface::class)) {
+            throw new \InvalidArgumentException("File parser must be an instance of FileParserInterface.");
         }
 
-        // finally set the fileReader
+        // finally set the fileParser
         $class = $this->config['map'][$extention];
-        $this->fileReader = new $class( $this->config );
+        $this->fileParser = new $class( $this->config );
 
         return $this;
     }
 
     /**
-     * Get the file reader instance been used for file import
+     * Get the file parser instance been used for file import
      */
-    public function getFileReader()
+    public function getFileParser(): FileParserInterface
     {
-        return $this->fileReader;
+        return $this->fileParser;
     }
 
     /**
-     * apply age constraints to filter data
+     * checks if we had already started reading file before
+     * and resume from the line we stopped
      * 
-     * @param array $record
-     * @return bool
+     * @return self
      */
-    // TODO: as a suggested improvement, consider using pipelines
-    public function isRequiredAge(array $record): bool
+    public function saveReadState(): self
     {
-        $dob = null;
-        
-        // data with unknown dob should be stored
-        if(empty($record['date_of_birth'])){
-            return true;
-        }
+        // keep track of last line read incase of system failure
+        file_put_contents($this->config['tracker'], (int)ftell($this->file));
 
-        // cater for dob in the format dd/mm/yyyy
-        elseif( strlen($record['date_of_birth']) === strlen('dd/mm/yyyy') ){
-            $dob = Carbon::createFromFormat('d/m/Y', $record['date_of_birth']);
-        }
-        // cater for dob in epoc and other formats
-        else{
-            $dob = Carbon::parse($record['date_of_birth']);
-        }
-
-        // get age from date difference
-        $age = $dob->diffInYears( Carbon::now() );
-
-        // only select age between 18 and 65
-        if( $age >= 18 && $age <= 65){
-            return true;
-        }
-
-        // age is not in required range return false
-        return false;
+        return $this;
     }
 
     /**
-     * Store valid json gotten so far from chunks to db
+     * check if we had already started reading file before
+     * and resume from the line we stopped
      * 
-     * @param array $user
-     * @return bool
+     * @return self
      */
-    public function save( array $userRecord ): bool
+    public function resumeReadState(): self
     {
-        // NOTE: 
-        // A faster method will be to build a chunk of array and
-        // insert all at once using Model::insert()
-        // but this does not accomodate table relations
-        // hence the choice to insert one by one
-        DB::beginTransaction();
-        try{
-            $user = $this->user::create($userRecord);
-            $user->card()->create($userRecord['credit_card']);
+        // determine the last line read and resume import
+        $this->lastReadPosition = (int)file_get_contents($this->config['tracker']);
 
-            DB::commit();
-        }
-        catch(\Throwable $error){
-            DB::rollback();
-            throw $error;
+        // move pointer to last read position
+        fseek($this->file, $this->lastReadPosition);
+
+        return $this;
+    }
+
+    /**
+     * Close file if open
+     * 
+     * @return void
+     */
+    public function closeFile(): bool
+    {
+        if( is_resource($this->file) ){
+            fclose($this->file);
         }
 
         return true;
+    }
+
+    /**
+     * Ensure file close incase we forget to do so
+     */
+    public function __destruct()
+    {
+        $this->closeFile();
     }
 }
