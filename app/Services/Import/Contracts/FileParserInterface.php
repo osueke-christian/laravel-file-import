@@ -18,4 +18,20 @@ interface FileParserInterface
      * @return string
      */
     public function getSupportedExtension(): string;
+
+    /**
+     * checks if we had already started parsing file before
+     * and restore left off buffer
+     * 
+     * @return self
+     */
+    public function saveBuffer(): self;
+
+    /**
+     * check if we had already started parsing file before
+     * and restore left off buffer
+     * 
+     * @return self
+     */
+    public function restoreBuffer(): self;
 }

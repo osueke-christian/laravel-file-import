@@ -2,14 +2,21 @@
 return [
     /*
     |--------------------------------------------------------------------------
-    | Read Position Tracker
+    | Read Position Trackers
     |--------------------------------------------------------------------------
     |
-    | Path to file to be used for tracking upload, 
-    |relative to project root
+    | Path to files to be used for tracking upload, 
+    | relative to project root, in case of interuptions
+    | 
+    | Note:
+    | =====
+    | We could have used a single file, serializing and array/object 
+    | of both trackers and unserializing when needed, however, this
+    | would be a quicker
     |
     */
-    'tracker' => base_path().'/resources/challenge/tracker.txt',
+    'position_tracker' => base_path().'/resources/challenge/position_tracker.txt',
+    'buffer_tracker' => base_path().'/resources/challenge/buffer_tracker.txt',
 
     /*
     |--------------------------------------------------------------------------

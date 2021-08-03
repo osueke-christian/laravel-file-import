@@ -1,3 +1,4 @@
 *
 !.gitignore
-!tracker.txt
+!position_tracker.txt
+!buffer_tracker.txt

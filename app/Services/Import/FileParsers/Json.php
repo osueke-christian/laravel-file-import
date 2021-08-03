@@ -12,6 +12,40 @@ class Json implements FileParserInterface
     private static $buffer;
 
     /**
+     * Configuration to be used for file import
+     * 
+     * @var array $config
+     */
+    private $config;
+
+    /**
+     * construct class dependencies
+     */
+    public function __construct()
+    {
+        $this->config = $this->loadConfig();
+        $this->restoreBuffer();
+    }
+
+    /**
+     * Loads config in memory
+     */
+    public function loadConfig(): array
+    {
+        return config('custom.fileparser');
+    }
+
+    /**
+     * returns name of the extension supported by a file parser
+     * 
+     * @return string
+     */
+    public function getSupportedExtension(): string
+    {
+        return 'csv';
+    }
+
+    /**
      * extract valid json from streamed chunk and convert to array
      * 
      * @param string $chunk
@@ -74,15 +108,33 @@ class Json implements FileParserInterface
                 $currentPosition+=1;
             }
         }
+
+        $this->saveBuffer();
     }
 
     /**
-     * returns name of the extension supported by a file parser
+     * checks if we had already started parsing file before
+     * and resume from the left off buffer
      * 
-     * @return string
+     * @return self
      */
-    public function getSupportedExtension(): string
+    public function saveBuffer(): self
     {
-        return 'csv';
+        file_put_contents($this->config['buffer_tracker'], self::$buffer);
+
+        return $this;
+    }
+
+    /**
+     * check if we had already started parsing file before
+     * and resume from the left off buffer
+     * 
+     * @return self
+     */
+    public function restoreBuffer(): self
+    {
+        self::$buffer = file_get_contents($this->config['buffer_tracker']);
+
+        return $this;
     }
 }

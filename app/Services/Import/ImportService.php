@@ -14,6 +14,8 @@ class ImportService implements ImportServiceInterface
 {
     /**
      * Configuration to be used for file import
+     * 
+     * @var array $config
      */
     private $config;
 
@@ -45,16 +47,16 @@ class ImportService implements ImportServiceInterface
      */
     public function __construct(UserServiceInterface $userService)
     {
-        $this->loadConfig();
+        $this->config = $this->loadConfig();
         $this->userService = $userService;
     }
 
     /**
      * Loads config in memory
      */
-    public function loadConfig(): void
+    public function loadConfig(): array
     {
-        $this->config = config('custom.fileparser');
+        return config('custom.fileparser');
     }
 
     public function openFile(string $filePath): self
@@ -178,7 +180,7 @@ class ImportService implements ImportServiceInterface
     public function saveReadState(): self
     {
         // keep track of last line read incase of system failure
-        file_put_contents($this->config['tracker'], (int)ftell($this->file));
+        file_put_contents($this->config['position_tracker'], (int)ftell($this->file));
 
         return $this;
     }
@@ -192,7 +194,7 @@ class ImportService implements ImportServiceInterface
     public function resumeReadState(): self
     {
         // determine the last line read and resume import
-        $this->lastReadPosition = (int)file_get_contents($this->config['tracker']);
+        $this->lastReadPosition = (int)file_get_contents($this->config['position_tracker']);
 
         // move pointer to last read position
         fseek($this->file, $this->lastReadPosition);
